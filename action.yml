@@ -1,0 +1,44 @@
+name: PR Guardian
+description: Checks pull requests against configurable quality rules and posts a review comment.
+author: pr-guardian
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  github-token:
+    description: Token used to read the PR and post the comment. Needs `pull-requests: write`.
+    default: ${{ github.token }}
+  config-path:
+    description: Path to the YAML config. Defaults are used when the file doesn't exist.
+    default: .github/pr-guardian.yml
+  fail-on:
+    description: Fail the run when any finding is at or above this severity (error, warning, info, never).
+    default: error
+  comment:
+    description: Post (or update) the report as a PR comment. The job summary is always written.
+    default: "true"
+  coverage-file:
+    description: Coverage report from an earlier step (istanbul coverage-summary.json or lcov.info). Overrides the config.
+    default: ""
+  lint-report:
+    description: ESLint JSON report from an earlier step. Overrides the config.
+    default: ""
+  ai-summary:
+    description: Add an AI-generated review summary. Requires `anthropic-api-key`.
+    default: "false"
+  anthropic-api-key:
+    description: Anthropic API key for the AI summary. Pass it from a repository secret.
+    default: ""
+
+outputs:
+  errors:
+    description: Number of error-severity findings.
+  warnings:
+    description: Number of warning-severity findings.
+  passed:
+    description: "\"true\" when the run did not fail."
+
+runs:
+  using: node24
+  main: dist/index.js

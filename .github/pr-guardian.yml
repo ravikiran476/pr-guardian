@@ -1,0 +1,49 @@
+# PR Guardian configuration. Every key is optional; omitted keys use the defaults shown.
+
+size:
+  maxFiles: 50
+  maxLines: 1000
+  severity: warning
+
+# Paths a PR must never change (error by default).
+blockedPaths: []
+#  - pattern: "config/production/**"
+#    reason: "production config is managed by ops"
+
+# Paths whose changes deserve a closer look. Replaces the default list when set.
+sensitivePaths:
+  - pattern: ".github/workflows/**"
+    reason: "CI/CD workflow change"
+  - pattern: "action.yml"
+    reason: "Action interface change"
+  - pattern: "package.json"
+    reason: "Dependency manifest"
+
+tests:
+  enabled: true
+  severity: warning
+  sourcePatterns: ["src/**/*.ts"]
+  testPatterns: ["test/**", "**/*.test.ts"]
+  ignore: ["src/main.ts", "src/types.ts", "src/checks/index.ts"]
+
+content:
+  useDefaults: true # secrets, private keys, .only, debugger, lint suppressions
+  rules:
+    - id: console-log
+      pattern: "console\\.(log|debug)\\("
+      message: "Use core.info/core.debug instead of console logging."
+      severity: warning
+      files: ["src/**"]
+
+coverage:
+  file: coverage/coverage-summary.json
+  minimum: 80
+
+lint:
+  # report: eslint.json
+  maxErrors: 0
+
+ai:
+  enabled: true
+  model: claude-opus-5-5
+  effort: medium

@@ -41,7 +41,7 @@ jobs:
       - run: npx eslint . -f json -o eslint.json
         continue-on-error: true
 
-      - uses: your-org/pr-guardian@v1
+      - uses: ravikiran476/pr-guardian@v1
         with:
           coverage-file: coverage/coverage-summary.json
           lint-report: eslint.json

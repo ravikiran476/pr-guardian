@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PR Guardian</title>
+<meta name="description" content="A GitHub Action that checks every pull request against configurable quality rules and posts one clear report comment.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%232f6fed' d='M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3z'/%3E%3Cpath fill='white' d='m10.5 15.2-3-3 1.4-1.4 1.6 1.6 4.6-4.6 1.4 1.4z'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #fbfbfa;
+    --surface: #ffffff;
+    --surface-2: #f3f4f2;
+    --text: #1a1c1e;
+    --muted: #5d6369;
+    --border: #e1e3e0;
+    --accent: #2f6fed;
+    --accent-soft: #e8effd;
+    --ok: #1f8a4c;
+    --warn: #a86400;
+    --err: #c62f2f;
+    --code-bg: #f3f4f2;
+    --radius: 10px;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111315;
+      --surface: #181b1e;
+      --surface-2: #1f2327;
+      --text: #e7e9ea;
+      --muted: #9aa1a8;
+      --border: #2b3035;
+      --accent: #6f9cff;
+      --accent-soft: #1b2740;
+      --ok: #4cc27f;
+      --warn: #e0a23c;
+      --err: #f07070;
+      --code-bg: #1f2327;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 var(--sans);
+  }
+  a { color: var(--accent); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  header.top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 0;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; color: var(--text); text-decoration: none; }
+  .brand svg { width: 26px; height: 26px; }
+  nav a { color: var(--muted); text-decoration: none; margin-left: 20px; font-size: 15px; }
+  nav a:hover { color: var(--text); }
+
+  .hero { padding: 56px 0 40px; display: grid; gap: 40px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .hero { grid-template-columns: 1fr 1fr; align-items: center; } }
+  h1 { font-size: clamp(32px, 5vw, 46px); line-height: 1.12; margin: 0 0 16px; letter-spacing: -0.02em; }
+  .lede { font-size: 18px; color: var(--muted); margin: 0 0 28px; max-width: 34em; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn {
+    display: inline-block; padding: 10px 18px; border-radius: 8px; font-weight: 600; font-size: 15px;
+    text-decoration: none; border: 1px solid var(--border); color: var(--text); background: var(--surface);
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  @media (prefers-color-scheme: dark) { .btn.primary { color: #0b1020; } }
+
+  section { padding: 48px 0; border-top: 1px solid var(--border); }
+  h2 { font-size: 26px; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+  .card h3 { margin: 0 0 6px; font-size: 16px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  /* Mock GitHub comment */
+  .comment { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; font-size: 14px; }
+  .comment-head { background: var(--surface-2); border-bottom: 1px solid var(--border); padding: 8px 14px; color: var(--muted); font-size: 13px; }
+  .comment-head b { color: var(--text); }
+  .comment-body { padding: 14px 16px 16px; }
+  .comment-body h4 { margin: 0 0 4px; font-size: 16px; }
+  .comment-body h5 { margin: 14px 0 6px; font-size: 14px; }
+  .counts { color: var(--muted); margin: 0 0 10px; }
+  .table-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 10px; border: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--surface-2); font-weight: 600; }
+  .comment ul { margin: 0; padding-left: 20px; }
+  .comment li { margin: 2px 0; }
+  .err { color: var(--err); } .warn { color: var(--warn); } .ok { color: var(--ok); }
+  .ai { margin-top: 14px; padding: 10px 12px; background: var(--accent-soft); border-radius: 8px; }
+  .ai p { margin: 4px 0; }
+
+  code, pre { font-family: var(--mono); font-size: 13.5px; }
+  :not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  .code { position: relative; }
+  pre {
+    margin: 0; background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; overflow-x: auto; line-height: 1.5;
+  }
+  .copy {
+    position: absolute; top: 8px; right: 8px; font: 600 12px var(--sans); padding: 4px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer;
+  }
+  .copy:hover { color: var(--text); }
+  .k { color: var(--accent); }
+  .c { color: var(--muted); }
+
+  ol.steps { padding-left: 20px; margin: 0 0 24px; }
+  ol.steps li { margin: 6px 0; }
+  .two { display: grid; gap: 24px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .two { grid-template-columns: 1fr 1fr; } }
+  .note { color: var(--muted); font-size: 15px; }
+
+  footer { padding: 32px 0 48px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="var(--accent)" d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3z"/><path fill="#fff" d="m10.5 15.2-3-3 1.4-1.4 1.6 1.6 4.6-4.6 1.4 1.4z"/></svg>
+      PR Guardian
+    </a>
+    <nav>
+      <a href="#checks">Checks</a>
+      <a href="#setup">Setup</a>
+      <a href="https://github.com/ravikiran476/pr-guardian">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <div>
+      <h1>Catch risky pull requests before review starts.</h1>
+      <p class="lede">PR Guardian is a GitHub Action that checks every pull request for missing tests, leaked secrets, risky paths, coverage drops and lint errors. It posts one report comment and updates it on every push.</p>
+      <div class="cta">
+        <a class="btn primary" href="#setup">Add it to a repo</a>
+        <a class="btn" href="https://github.com/ravikiran476/pr-guardian">View source</a>
+      </div>
+    </div>
+
+    <div class="comment" aria-label="Example PR Guardian report comment">
+      <div class="comment-head"><b>github-actions</b> bot commented</div>
+      <div class="comment-body">
+        <h4><span class="err">❌</span> PR Guardian: changes need attention</h4>
+        <p class="counts">2 errors · 3 warnings · 0 notes</p>
+        <div class="table-scroll">
+          <table>
+            <tr><th></th><th>Check</th><th>Result</th></tr>
+            <tr><td>✅</td><td>PR size</td><td>2 files, 5 lines</td></tr>
+            <tr><td>⚠️</td><td>Protected paths</td><td>1 flagged</td></tr>
+            <tr><td>⚠️</td><td>Tests</td><td>0/1 source files have matching test changes</td></tr>
+            <tr><td>❌</td><td>Risky content</td><td>6 rules</td></tr>
+            <tr><td>✅</td><td>Coverage</td><td>86.4% lines (min 80%)</td></tr>
+          </table>
+        </div>
+        <h5 class="err">❌ Errors</h5>
+        <ul>
+          <li><code>src/auth.ts:2</code> Possible hardcoded secret.</li>
+          <li><code>src/auth.ts:4</code> Focused test (<code>.only</code>) will skip the rest of the suite.</li>
+        </ul>
+        <div class="ai">
+          <b>🤖 AI review summary</b>
+          <p><b>Risks:</b> <code>src/auth.ts</code> hardcodes a password in source. Move it to an environment variable before merging.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section id="checks">
+    <h2>What it checks</h2>
+    <p class="sub">Every finding is an error, warning or note. You choose which severity fails the run.</p>
+    <div class="grid">
+      <div class="card"><h3>Missing tests</h3><p>Each changed source file needs a matching test change. <code>auth.ts</code> pairs with <code>auth.test.ts</code>, <code>auth_test.go</code> or <code>test_auth.py</code>. Deleted tests are flagged.</p></div>
+      <div class="card"><h3>Risky content</h3><p>Scans only added lines for hardcoded secrets, AWS and private keys, <code>.only</code> tests, <code>debugger</code> and lint suppressions. You can add your own regex rules.</p></div>
+      <div class="card"><h3>Protected paths</h3><p>Blocks paths you list and flags workflows, migrations, Dockerfiles, Terraform and dependency manifests. Renamed files are checked under both names.</p></div>
+      <div class="card"><h3>Coverage threshold</h3><p>Fails below your minimum line coverage. Reads an istanbul <code>coverage-summary.json</code> or <code>lcov.info</code> from any language.</p></div>
+      <div class="card"><h3>Lint limits</h3><p>Enforces error and warning limits from an ESLint JSON report, counting only the files the PR touched.</p></div>
+      <div class="card"><h3>PR size</h3><p>Flags PRs over a file or line limit. Lockfiles, build output and snapshots don't count.</p></div>
+      <div class="card"><h3>AI review summary</h3><p>Optional. Claude summarizes what changed, the risks and its suggestions. It's advisory and never fails the run.</p></div>
+    </div>
+  </section>
+
+  <section id="setup">
+    <h2>Setup</h2>
+    <p class="sub">About two minutes. Nothing to host: the action runs inside your GitHub workflow.</p>
+    <ol class="steps">
+      <li>Add the workflow below as <code>.github/workflows/pr-guardian.yml</code>.</li>
+      <li>Optional: add an <code>ANTHROPIC_API_KEY</code> repository secret for the AI summary.</li>
+      <li>Open a pull request. The report shows up as a comment.</li>
+    </ol>
+    <div class="code">
+      <button class="copy" data-target="workflow">Copy</button>
+<pre id="workflow"><span class="k">name:</span> PR Guardian
+<span class="k">on:</span>
+  <span class="k">pull_request:</span>
+
+<span class="k">permissions:</span>
+  <span class="k">contents:</span> read
+  <span class="k">pull-requests:</span> write
+
+<span class="k">jobs:</span>
+  <span class="k">guardian:</span>
+    <span class="k">runs-on:</span> ubuntu-latest
+    <span class="k">steps:</span>
+      - <span class="k">uses:</span> actions/checkout@v5
+
+      <span class="c"># Optional: produce reports for the coverage and lint checks.</span>
+      - <span class="k">run:</span> npm ci &amp;&amp; npx vitest run --coverage --coverage.reporter=json-summary
+        <span class="k">continue-on-error:</span> true
+
+      - <span class="k">uses:</span> ravikiran476/pr-guardian@v1
+        <span class="k">with:</span>
+          <span class="k">coverage-file:</span> coverage/coverage-summary.json
+          <span class="k">ai-summary:</span> true
+          <span class="k">anthropic-api-key:</span> ${{ secrets.ANTHROPIC_API_KEY }}</pre>
+    </div>
+  </section>
+
+  <section id="config">
+    <h2>Configuration</h2>
+    <p class="sub">Optional. Put a <code>.github/pr-guardian.yml</code> in your repo; any key you leave out uses its default.</p>
+    <div class="two">
+      <div class="code">
+        <button class="copy" data-target="config-yml">Copy</button>
+<pre id="config-yml"><span class="k">size:</span> { <span class="k">maxFiles:</span> 50, <span class="k">maxLines:</span> 1000 }
+
+<span class="k">blockedPaths:</span>
+  - <span class="k">pattern:</span> "config/production/**"
+    <span class="k">reason:</span> "managed by ops"
+
+<span class="k">tests:</span>
+  <span class="k">sourcePatterns:</span> ["src/**/*.ts"]
+  <span class="k">severity:</span> error   <span class="c"># block merges without tests</span>
+
+<span class="k">content:</span>
+  <span class="k">rules:</span>
+    - <span class="k">id:</span> no-console
+      <span class="k">pattern:</span> "console\\.log\\("
+      <span class="k">message:</span> "Remove console.log"
+
+<span class="k">coverage:</span> { <span class="k">minimum:</span> 85 }
+<span class="k">lint:</span> { <span class="k">maxErrors:</span> 0, <span class="k">maxWarnings:</span> 10 }</pre>
+      </div>
+      <div>
+        <div class="table-scroll">
+          <table>
+            <tr><th>Input</th><th>Default</th><th>Purpose</th></tr>
+            <tr><td><code>fail-on</code></td><td><code>error</code></td><td>Lowest severity that fails the run: <code>error</code>, <code>warning</code>, <code>info</code> or <code>never</code>.</td></tr>
+            <tr><td><code>config-path</code></td><td><code>.github/pr-guardian.yml</code></td><td>Where to read rules from.</td></tr>
+            <tr><td><code>comment</code></td><td><code>true</code></td><td>Post the PR comment. The job summary is always written.</td></tr>
+            <tr><td><code>coverage-file</code></td><td></td><td>Coverage report from an earlier step.</td></tr>
+            <tr><td><code>lint-report</code></td><td></td><td>ESLint JSON report from an earlier step.</td></tr>
+            <tr><td><code>ai-summary</code></td><td><code>false</code></td><td>Add the Claude review summary.</td></tr>
+            <tr><td><code>anthropic-api-key</code></td><td></td><td>Needed for the AI summary.</td></tr>
+          </table>
+        </div>
+        <p class="note">Outputs <code>errors</code>, <code>warnings</code> and <code>passed</code> can drive later steps. PRs from forks don't get repository secrets, so the AI summary is skipped for them, with a note in the report. All other checks still run.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    PR Guardian · MIT licensed · <a href="https://github.com/ravikiran476/pr-guardian">github.com/ravikiran476/pr-guardian</a>
+  </footer>
+</div>
+<script>
+  document.querySelectorAll(".copy").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const text = document.getElementById(btn.dataset.target).innerText;
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = "Copied";
+      } catch {
+        btn.textContent = "Select & copy";
+      }
+      setTimeout(() => (btn.textContent = "Copy"), 1500);
+    });
+  });
+</script>
+</body>
+</html>

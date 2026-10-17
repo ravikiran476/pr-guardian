@@ -2,6 +2,8 @@
 
 A GitHub Action that checks every pull request against configurable quality rules and posts one report comment, which it updates on each push.
 
+Website: https://ravikiran476.github.io/pr-guardian/
+
 | Check | What it does |
 |---|---|
 | **PR size** | Flags PRs over a file or line limit. Lockfiles, `dist/` and snapshots don't count. |
@@ -129,4 +131,5 @@ src/
   ai.ts           Claude summary and diff budgeting
   report.ts       Markdown rendering and the pass/fail decision
   github.ts       listing PR files and creating or updating the comment
+site/             landing page, published to GitHub Pages by .github/workflows/pages.yml
 ```

@@ -10,32 +10,60 @@ const pathRule = z.object({
   severity: severity.default("warning"),
 });
 
-const contentRule = z.object({
-  id: z.string(),
-  /** JavaScript regular expression, matched against each added line. */
-  pattern: z.string(),
-  /** RegExp flags, e.g. "i" for case-insensitive. */
-  flags: z.string().default(""),
-  message: z.string(),
-  severity: severity.default("warning"),
-  /** Only scan files matching these globs. Empty means all files. */
-  files: z.array(z.string()).default([]),
-  /** Skip files matching these globs. */
-  exclude: z.array(z.string()).default([]),
-});
+const contentRule = z
+  .object({
+    id: z.string(),
+    /** JavaScript regular expression, matched against each added line. */
+    pattern: z.string(),
+    /**
+     * RegExp flags, e.g. "i" for case-insensitive. "g" and "y" are dropped: each line is
+     * tested separately, and with them a match would make the test of the next line skip ahead.
+     */
+    flags: z
+      .string()
+      .default("")
+      .transform((f) => f.replace(/[gy]/g, "")),
+    message: z.string(),
+    severity: severity.default("warning"),
+    /** Only scan files matching these globs. Empty means all files. */
+    files: z.array(z.string()).default([]),
+    /** Skip files matching these globs. */
+    exclude: z.array(z.string()).default([]),
+    /** The rule finds credentials: files it matches are never sent to the AI summary. */
+    secret: z.boolean().default(false),
+  })
+  .superRefine((rule, ctx) => {
+    try {
+      new RegExp(rule.pattern, rule.flags);
+    } catch (err) {
+      ctx.addIssue({ code: "custom", path: ["pattern"], message: `rule "${rule.id}": ${(err as Error).message}` });
+    }
+  });
 
 export const DEFAULT_CONTENT_RULES: z.input<typeof contentRule>[] = [
   {
     id: "aws-access-key",
-    pattern: "AKIA[0-9A-Z]{16}",
+    pattern: "\\b(AKIA|ASIA)[0-9A-Z]{16}\\b",
     message: "Possible AWS access key committed.",
     severity: "error",
+    secret: true,
   },
   {
     id: "private-key",
-    pattern: "-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----",
+    pattern: "-----BEGIN (RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED )?PRIVATE KEY( BLOCK)?-----",
     message: "Private key material committed.",
     severity: "error",
+    secret: true,
+  },
+  {
+    id: "provider-token",
+    // GitHub, GitLab, Slack, Stripe live, Google, npm, Anthropic and OpenAI keys: formats with a
+    // fixed prefix, so a match is almost never a false positive.
+    pattern:
+      "\\b(gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,}|glpat-[A-Za-z0-9_-]{20,}|xox[abposr]-[A-Za-z0-9-]{10,}|(sk|rk)_live_[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{35}|npm_[A-Za-z0-9]{36}|sk-ant-(api|admin)\\d{2}-[A-Za-z0-9_-]{80,}|sk-(proj-|svcacct-)?[A-Za-z0-9_-]{20,}T3BlbkFJ[A-Za-z0-9_-]{20,})",
+    message: "Access token or API key committed.",
+    severity: "error",
+    secret: true,
   },
   {
     id: "hardcoded-secret",
@@ -44,6 +72,7 @@ export const DEFAULT_CONTENT_RULES: z.input<typeof contentRule>[] = [
     message: "Possible hardcoded secret.",
     severity: "error",
     exclude: ["**/*.test.*", "**/*.spec.*", "**/test/**", "**/tests/**", "**/fixtures/**"],
+    secret: true,
   },
   {
     id: "focused-test",
@@ -160,10 +189,14 @@ export function parseConfig(raw: unknown): Config {
   return result.data;
 }
 
-/** Loads config from YAML; a missing file means "use defaults". */
+/** Parses config YAML; no text (no file) means "use defaults". */
+export function parseConfigText(text: string | undefined): Config {
+  return parseConfig(text === undefined ? {} : parseYaml(text));
+}
+
+/** Loads config from a local YAML file; a missing file means "use defaults". */
 export function loadConfig(path: string): Config {
-  if (!existsSync(path)) return parseConfig({});
-  return parseConfig(parseYaml(readFileSync(path, "utf8")));
+  return parseConfigText(existsSync(path) ? readFileSync(path, "utf8") : undefined);
 }
 
 /** Default rules first, then user rules; a user rule with the same id replaces the default. */

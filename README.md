@@ -9,7 +9,7 @@ Website: https://ravikiran476.github.io/pr-guardian/
 | **PR size** | Flags PRs over a file or line limit. Lockfiles, `dist/` and snapshots don't count. |
 | **Protected paths** | Blocks changes to paths you list and flags sensitive ones (workflows, migrations, Dockerfiles, Terraform, dependency manifests). Renames are checked under both names. |
 | **Tests** | Flags each changed source file that has no matching test change (`auth.ts` ↔ `auth.test.ts`, `handler_test.go`, `test_models.py`), and flags deleted tests. |
-| **Risky content** | Scans *added* lines for hardcoded secrets, AWS keys, private keys, `.only` tests, `debugger`, and lint suppressions, plus your own regex rules. |
+| **Risky content** | Scans *added* lines for hardcoded secrets, private keys, AWS keys and other provider tokens (GitHub, GitLab, Slack, Stripe, Google, npm, Anthropic, OpenAI), `.only` tests, `debugger`, and lint suppressions, plus your own regex rules. |
 | **Coverage** | Enforces a minimum line coverage from an istanbul `coverage-summary.json` or `lcov.info`. |
 | **Lint** | Enforces error and warning limits from an ESLint JSON report, counting only files the PR touched. |
 | **AI summary** *(optional)* | A short Claude-written review: what changed, risks, and suggestions. It's advisory and never fails the run. |
@@ -43,7 +43,7 @@ jobs:
       - run: npx eslint . -f json -o eslint.json
         continue-on-error: true
 
-      - uses: ravikiran476/pr-guardian@v1
+      - uses: ravikiran476/pr-guardian@v1 # or pin a release: @v1.1.0
         with:
           coverage-file: coverage/coverage-summary.json
           lint-report: eslint.json
@@ -57,8 +57,8 @@ PR Guardian doesn't run your tests or linter itself. Any earlier step that write
 
 | Input | Default | Description |
 |---|---|---|
-| `github-token` | `github.token` | Needs `pull-requests: write` to comment. |
-| `config-path` | `.github/pr-guardian.yml` | YAML config. Defaults apply when the file is missing. |
+| `github-token` | `github.token` | Needs `pull-requests: write` to comment. On PRs from forks the token is read-only: the comment is skipped with a warning and the report is in the job summary. |
+| `config-path` | `.github/pr-guardian.yml` | YAML config, read from the PR's **base** branch. Defaults apply when the file is missing there. |
 | `fail-on` | `error` | `error`, `warning`, `info`, or `never`. |
 | `comment` | `true` | Post or update the PR comment. The job summary is always written. |
 | `coverage-file` | | Overrides `coverage.file`. |
@@ -71,6 +71,8 @@ Outputs: `errors`, `warnings`, `passed`.
 ## Configuration
 
 Every key is optional. See [`.github/pr-guardian.yml`](.github/pr-guardian.yml) for an annotated example and [`src/config.ts`](src/config.ts) for every option and its default.
+
+The config is read from the pull request's **base** branch, not from the PR. A PR therefore cannot relax the rules that check it: a change to the config takes effect once it is merged, and the PR that makes it gets a "Guardian config" warning so a reviewer looks at it. An invalid config, including a content rule whose `pattern` is not a valid regular expression, fails the run with a message naming the rule.
 
 ```yaml
 size: { maxFiles: 50, maxLines: 1000, severity: warning }
@@ -101,16 +103,18 @@ ai:
   maxDiffChars: 150000
 ```
 
-A custom content rule with the same `id` as a built-in rule replaces it. Set `content.useDefaults: false` to drop all the built-in rules.
+A custom content rule with the same `id` as a built-in rule replaces it. Set `content.useDefaults: false` to drop all the built-in rules. Each added line is tested on its own, so the `g` and `y` flags are ignored. Mark a rule `secret: true` if it finds credentials: files it matches are never sent to the AI summary.
 
 ## AI summary
 
-The summary uses the Anthropic API (`@anthropic-ai/sdk`) with `claude-opus-5-5` by default. It sends the PR title, description, check results and diff. When the diff is over `maxDiffChars`, whole files are left out, smallest-first packing fits in as many as possible, and the files left out are listed by name to the model so it doesn't guess about them. If the model declines, or the API call fails, the report says so and the run continues.
+The summary uses the Anthropic API (`@anthropic-ai/sdk`) with `claude-opus-5-5` by default. It sends the PR title, description, check results and diff. When the diff is over `maxDiffChars`, whole files are left out, smallest-first packing fits in as many as possible, and the files left out are listed by name to the model so it doesn't guess about them. If the model declines, runs out of output tokens, or the API call fails, the report says which and the run continues.
 
 Security notes:
 
-- The PR description and diff are written by the PR author. The prompt marks them as untrusted data, and the summary has no effect on pass/fail, so prompt injection can't change the outcome of a run.
+- **Credentials are not sent.** A file in which a secret rule matched (private keys, AWS keys, provider tokens, hardcoded secrets, or your rules marked `secret: true`) is left out of the prompt entirely, and the model is told it was withheld.
+- The PR description and diff are written by the PR author. The prompt marks them as untrusted data, author text cannot close the prompt's tags, and the summary has no effect on pass/fail, so prompt injection can't change the outcome of a run.
 - Use the `pull_request` trigger, not `pull_request_target`. With `pull_request`, PRs from forks don't get your secrets. The AI summary is skipped for them, with a note, and every other check still runs.
+- With `pull_request`, the workflow file itself comes from the PR, so a PR could edit the workflow to skip PR Guardian. Workflow changes are flagged as sensitive by default; to make the check binding, mark it as a required status check in branch protection and require review of workflow changes (for example with CODEOWNERS).
 
 ## Development
 
@@ -122,6 +126,8 @@ npm run build        # bundles to dist/index.js, which the action runs
 ```
 
 `dist/` is committed because GitHub runs the action straight from the repo. CI fails if `dist/` is out of date with `src/`.
+
+Releases follow semver and are listed in [CHANGELOG.md](CHANGELOG.md). Each release gets a full tag (`v1.1.0`), and the major tag (`v1`) is moved to the latest `v1.x.y`, so `@v1` users get fixes without changing their workflow.
 
 ```
 src/

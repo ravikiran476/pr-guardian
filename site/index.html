@@ -179,12 +179,12 @@
     <p class="sub">Every finding is an error, warning or note. You choose which severity fails the run.</p>
     <div class="grid">
       <div class="card"><h3>Missing tests</h3><p>Each changed source file needs a matching test change. <code>auth.ts</code> pairs with <code>auth.test.ts</code>, <code>auth_test.go</code> or <code>test_auth.py</code>. Deleted tests are flagged.</p></div>
-      <div class="card"><h3>Risky content</h3><p>Scans only added lines for hardcoded secrets, AWS and private keys, <code>.only</code> tests, <code>debugger</code> and lint suppressions. You can add your own regex rules.</p></div>
+      <div class="card"><h3>Risky content</h3><p>Scans only added lines for hardcoded secrets, private keys, AWS keys and other provider tokens, <code>.only</code> tests, <code>debugger</code> and lint suppressions. You can add your own regex rules.</p></div>
       <div class="card"><h3>Protected paths</h3><p>Blocks paths you list and flags workflows, migrations, Dockerfiles, Terraform and dependency manifests. Renamed files are checked under both names.</p></div>
       <div class="card"><h3>Coverage threshold</h3><p>Fails below your minimum line coverage. Reads an istanbul <code>coverage-summary.json</code> or <code>lcov.info</code> from any language.</p></div>
       <div class="card"><h3>Lint limits</h3><p>Enforces error and warning limits from an ESLint JSON report, counting only the files the PR touched.</p></div>
       <div class="card"><h3>PR size</h3><p>Flags PRs over a file or line limit. Lockfiles, build output and snapshots don't count.</p></div>
-      <div class="card"><h3>AI review summary</h3><p>Optional. Claude summarizes what changed, the risks and its suggestions. It's advisory and never fails the run.</p></div>
+      <div class="card"><h3>AI review summary</h3><p>Optional. Claude summarizes what changed, the risks and its suggestions. It's advisory and never fails the run. Files where a secret was found are never sent.</p></div>
     </div>
   </section>
 
@@ -226,7 +226,7 @@
 
   <section id="config">
     <h2>Configuration</h2>
-    <p class="sub">Optional. Put a <code>.github/pr-guardian.yml</code> in your repo; any key you leave out uses its default.</p>
+    <p class="sub">Optional. Put a <code>.github/pr-guardian.yml</code> in your repo; any key you leave out uses its default. It is read from the PR's base branch, so a pull request can't loosen the rules that check it.</p>
     <div class="two">
       <div class="code">
         <button class="copy" data-target="config-yml">Copy</button>
@@ -254,7 +254,7 @@
           <table>
             <tr><th>Input</th><th>Default</th><th>Purpose</th></tr>
             <tr><td><code>fail-on</code></td><td><code>error</code></td><td>Lowest severity that fails the run: <code>error</code>, <code>warning</code>, <code>info</code> or <code>never</code>.</td></tr>
-            <tr><td><code>config-path</code></td><td><code>.github/pr-guardian.yml</code></td><td>Where to read rules from.</td></tr>
+            <tr><td><code>config-path</code></td><td><code>.github/pr-guardian.yml</code></td><td>Where to read rules from, on the base branch.</td></tr>
             <tr><td><code>comment</code></td><td><code>true</code></td><td>Post the PR comment. The job summary is always written.</td></tr>
             <tr><td><code>coverage-file</code></td><td></td><td>Coverage report from an earlier step.</td></tr>
             <tr><td><code>lint-report</code></td><td></td><td>ESLint JSON report from an earlier step.</td></tr>
@@ -262,7 +262,7 @@
             <tr><td><code>anthropic-api-key</code></td><td></td><td>Needed for the AI summary.</td></tr>
           </table>
         </div>
-        <p class="note">Outputs <code>errors</code>, <code>warnings</code> and <code>passed</code> can drive later steps. PRs from forks don't get repository secrets, so the AI summary is skipped for them, with a note in the report. All other checks still run.</p>
+        <p class="note">Outputs <code>errors</code>, <code>warnings</code> and <code>passed</code> can drive later steps. PRs from forks don't get repository secrets or a token that can comment, so the AI summary and the comment are skipped for them, with a note; the report is in the job summary. All other checks still run.</p>
       </div>
     </div>
   </section>

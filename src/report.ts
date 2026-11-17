@@ -40,7 +40,7 @@ function escapeCell(s: string): string {
 export interface RenderOptions {
   failed: boolean;
   aiSummary?: string;
-  /** Shown when AI was enabled but produced nothing, e.g. "the model declined". */
+  /** Why AI was enabled but produced nothing (e.g. "the model declined"), or a caveat about the summary. */
   aiNote?: string;
   runUrl?: string;
 }
@@ -79,7 +79,8 @@ export function renderReport(results: CheckResult[], opts: RenderOptions): strin
   }
 
   if (opts.aiSummary) {
-    lines.push("#### 🤖 AI review summary", "", opts.aiSummary, "", "<sub>AI-generated; verify before acting on it.</sub>", "");
+    const caveat = opts.aiNote ? ` Note: ${opts.aiNote}` : "";
+    lines.push("#### 🤖 AI review summary", "", opts.aiSummary, "", `<sub>AI-generated; verify before acting on it.${caveat}</sub>`, "");
   } else if (opts.aiNote) {
     lines.push(`<sub>🤖 AI summary unavailable: ${opts.aiNote}</sub>`, "");
   }

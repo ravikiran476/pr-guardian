@@ -22,6 +22,18 @@ export async function listChangedFiles(octokit: Octokit, ref: RepoRef, pullNumbe
   }));
 }
 
+/** A file's text at a commit, or undefined when it does not exist there. */
+export async function readFileAtRef(octokit: Octokit, ref: RepoRef, path: string, sha: string): Promise<string | undefined> {
+  try {
+    const { data } = await octokit.rest.repos.getContent({ ...ref, path, ref: sha });
+    if (Array.isArray(data) || data.type !== "file") throw new Error(`${path} is not a file`);
+    return Buffer.from(data.content, "base64").toString("utf8");
+  } catch (err) {
+    if ((err as { status?: number }).status === 404) return undefined;
+    throw err;
+  }
+}
+
 /** Updates our previous report comment if there is one, otherwise creates it. */
 export async function upsertComment(octokit: Octokit, ref: RepoRef, issueNumber: number, body: string): Promise<string> {
   const comments = await octokit.paginate(octokit.rest.issues.listComments, {
